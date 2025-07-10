@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from .models import Student
 from .serializers import StudentSerializer
 from teachers.models import Teacher
+from rest_framework.permissions import SAFE_METHODS
+
 
 
 class StudentViewSet(viewsets.ModelViewSet):
@@ -17,7 +19,7 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Student.objects.all()
         elif user.role == 'Teacher':
             try:
-                teacher = Teacher.objects.get(username=username) 
+                teacher = Teacher.objects.get(user=user) 
                 return Student.objects.filter(assigned_teacher=teacher)
             except Teacher.DoesNotExist:
                 return Student.objects.none()
@@ -25,12 +27,14 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Student.objects.filter(user=user)
 
     def get_permissions(self):
-       
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-         
-            if not (self.request.user.is_staff or self.request.user.role == 'Teacher'):
-                return [IsAuthenticated()]  
-        return [IsAuthenticated()]
+        user= self.request.user
+        if user.role == 'Student' and self.request.method not in SAFE_METHODS:
+            self.permission_denied(
+                self.request,
+                message="Students are only allowed to view their own details."
+            )
+
+        return super().get_permissions()
 
     @action(detail=False, methods=['get'], url_path='assigned')
     def assigned(self, request):
