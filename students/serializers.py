@@ -9,18 +9,19 @@ class StudentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ['username', 'first_name', 'last_name', 'email', 'phone_number',
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone_number',
                   'roll_number', 'student_class', 'date_of_birth', 'admission_date',
                   'status', 'assigned_teacher', 'password']
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        username = validated_data.get('username')  
-        print("usernaem", username)
+        username = validated_data.pop('user')
+        #username = user_data.get('username')  
+        #print("usernaem", username)
         email = validated_data.get('email')
 
         if CustomUser.objects.filter(username=username).exists():
-            print("bla")
+            #print("bla")
             raise serializers.ValidationError({'username': 'This username is already taken.'})
         if CustomUser.objects.filter(email=email).exists():
             raise serializers.ValidationError({'email': 'This email is already registered.'})

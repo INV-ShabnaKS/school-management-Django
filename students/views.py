@@ -4,19 +4,25 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Student
 from .serializers import StudentSerializer
+from teachers.models import Teacher
+
 
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class = None
+   
     def get_queryset(self):
         user = self.request.user
         if user.role == 'Admin':
             return Student.objects.all()
-        if user.role == 'Teacher':
-            return Student.objects.filter(assigned_teacher__user=user)
-        
-        return Student.objects.filter(user=user)
+        elif user.role == 'Teacher':
+            try:
+                teacher = Teacher.objects.get(username=username) 
+                return Student.objects.filter(assigned_teacher=teacher)
+            except Teacher.DoesNotExist:
+                return Student.objects.none()
+        else:
+            return Student.objects.filter(user=user)
 
     def get_permissions(self):
        

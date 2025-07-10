@@ -13,7 +13,7 @@ class Student(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
-    phone_number = models.CharField(max_length=15, unique=True)
+    phone_number = models.CharField(max_length=15)
     roll_number = models.CharField(max_length=50, unique=True)
     student_class = models.CharField(max_length=50)  # Class/Grade
     date_of_birth = models.DateField()
