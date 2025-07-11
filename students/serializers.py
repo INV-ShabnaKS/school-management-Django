@@ -52,7 +52,7 @@ class StudentSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password')
         user_data = validated_data.pop('user')
         username = user_data.get('username')
-        email = validated_data.get('email')
+        email = user_data.get('email')
         phone_number = user_data.get('phone_number')
 
         if CustomUser.objects.filter(username=username).exists():
