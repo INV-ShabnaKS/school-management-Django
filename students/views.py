@@ -31,14 +31,15 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         user = self.request.user
-        if user.role == 'Student' and self.request.method not in SAFE_METHODS:
+        if user.is_authenticated and user.role == 'Student' and self.request.method not in SAFE_METHODS:
+
             self.permission_denied(
                 self.request,
                 message="Students are only allowed to view their own details."
             )
         return super().get_permissions()
 
-    # Assigned Students List (for Teachers)
+ 
     @action(detail=False, methods=['get'], url_path='assigned')
     def assigned(self, request):
         user = request.user
@@ -57,12 +58,11 @@ class StudentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
-    # ✅ CSV Export Functionality
+    # CSV Export Functionality
     @action(detail=False, methods=['get'], url_path='export-csv')
     def export_students_csv(self, request):
         user = request.user
 
-        # Role-based student filtering
         if user.role == 'Admin':
             students = Student.objects.all()
         elif user.role == 'Teacher':
@@ -74,7 +74,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         else:
             return Response({'detail': 'Not authorized.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Create CSV response
+     
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="students.csv"'
 
