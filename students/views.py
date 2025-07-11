@@ -7,19 +7,22 @@ from .serializers import StudentSerializer
 from teachers.models import Teacher
 from rest_framework.permissions import SAFE_METHODS
 
+# For CSV export
+from django.http import HttpResponse
+import csv
 
 
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
-   
+
     def get_queryset(self):
         user = self.request.user
         if user.role == 'Admin':
             return Student.objects.all()
         elif user.role == 'Teacher':
             try:
-                teacher = Teacher.objects.get(user=user) 
+                teacher = Teacher.objects.get(user=user)
                 return Student.objects.filter(assigned_teacher=teacher)
             except Teacher.DoesNotExist:
                 return Student.objects.none()
@@ -27,28 +30,73 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Student.objects.filter(user=user)
 
     def get_permissions(self):
-        user= self.request.user
+        user = self.request.user
         if user.role == 'Student' and self.request.method not in SAFE_METHODS:
             self.permission_denied(
                 self.request,
                 message="Students are only allowed to view their own details."
             )
-
         return super().get_permissions()
 
+    # Assigned Students List (for Teachers)
     @action(detail=False, methods=['get'], url_path='assigned')
     def assigned(self, request):
-       
         user = request.user
         if user.role == 'Teacher':
             qs = Student.objects.filter(assigned_teacher__user=user)
         elif user.is_staff:
             qs = Student.objects.all()
         else:
-            return Response({"detail":"Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
         page = self.paginate_queryset(qs)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
+
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
+
+    # ✅ CSV Export Functionality
+    @action(detail=False, methods=['get'], url_path='export-csv')
+    def export_students_csv(self, request):
+        user = request.user
+
+        # Role-based student filtering
+        if user.role == 'Admin':
+            students = Student.objects.all()
+        elif user.role == 'Teacher':
+            try:
+                teacher = Teacher.objects.get(user=user)
+                students = Student.objects.filter(assigned_teacher=teacher)
+            except Teacher.DoesNotExist:
+                return Response({'detail': 'Teacher not found.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({'detail': 'Not authorized.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="students.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Roll No',
+            'Class', 'Date of Birth', 'Admission Date', 'Status', 'Assigned Teacher'
+        ])
+
+        for student in students:
+            writer.writerow([
+                student.id,
+                student.first_name,
+                student.last_name,
+                student.user.email if student.user else '',
+                student.user.phone_number if student.user else '',
+                student.roll_number,
+                student.student_class,
+                student.date_of_birth,
+                student.admission_date,
+                student.status,
+                student.assigned_teacher.user.username if student.assigned_teacher else ''
+            ])
+
+        return response
