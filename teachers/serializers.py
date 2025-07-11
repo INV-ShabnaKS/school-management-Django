@@ -15,7 +15,6 @@ phone_validator = RegexValidator(
 class TeacherSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True)
-
     email = serializers.EmailField(source='user.email')
     phone_number = serializers.CharField(validators=[phone_validator], source='user.phone_number')
 
@@ -47,6 +46,7 @@ class TeacherSerializer(serializers.ModelSerializer):
         username = data.get('username')
         employee_id = data.get('employee_id')
         date_of_joining = data.get('date_of_joining')
+        phone_number= data.get('phone_number')
 
         if CustomUser.objects.filter(username=username).exists():
             raise serializers.ValidationError({'username': 'This username is already taken.'})
@@ -59,10 +59,11 @@ class TeacherSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        user_data=validated_data.pop('user')
         username = validated_data.pop('username')
         password = validated_data.pop('password')
-        email = validated_data.pop('email')
-        phone_number = validated_data.pop('phone_number')
+        email = user_data.get('email')
+        phone_number = user_data.get('phone_number')
 
         user = CustomUser.objects.create_user(
             username=username,
