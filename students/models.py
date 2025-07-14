@@ -21,3 +21,8 @@ class Student(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
+ 
+    def delete(self, *args, **kwargs):
+        if self.user:
+            self.user.delete()
+        super().delete(*args, **kwargs)

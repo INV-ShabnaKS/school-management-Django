@@ -18,3 +18,7 @@ class Teacher(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} - {self.subject_specialization}"
+
+    def delete(self, *args, **kwargs):
+        self.user.delete()
+        super().delete(*args, **kwargs)

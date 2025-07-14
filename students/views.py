@@ -11,6 +11,14 @@ from rest_framework.permissions import SAFE_METHODS
 from django.http import HttpResponse
 import csv
 
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser
+from users.models import CustomUser
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+import csv
+from io import TextIOWrapper
+
 
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
@@ -100,3 +108,71 @@ class StudentViewSet(viewsets.ModelViewSet):
             ])
 
         return response
+
+
+
+class StudentCSVImportView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request, format=None):
+        user = request.user
+
+        if user.role not in ['Admin', 'Teacher']:
+            return Response({"error": "Only Admins and Teachers can import students."}, status=403)
+
+        csv_file = request.FILES.get('file')
+
+        if not csv_file:
+            return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+
+        decoded_file = TextIOWrapper(csv_file, encoding='utf-8')
+        reader = csv.DictReader(decoded_file)
+
+        created_count = 0
+        errors = []
+
+        for index, row in enumerate(reader, start=1):
+            try:
+                validate_password(row['password'])
+
+                if CustomUser.objects.filter(username=row['username']).exists():
+                    errors.append(f"Row {index}: Username '{row['username']}' already exists.")
+                    continue
+
+                if CustomUser.objects.filter(email=row['email']).exists():
+                    errors.append(f"Row {index}: Email '{row['email']}' already registered.")
+                    continue
+
+                user = CustomUser.objects.create_user(
+                    username=row['username'],
+                    email=row['email'],
+                    password=row['password'],
+                    phone_number=row['phone_number'],
+                    role='Student'
+                )
+
+                Student.objects.create(
+                    user=user,
+                    first_name=row['first_name'],
+                    last_name=row['last_name'],
+                    roll_number=row['roll_number'],
+                    student_class=row['student_class'],
+                    date_of_birth=row['date_of_birth'],
+                    admission_date=row['admission_date'],
+                    status=row['status'],
+                    assigned_teacher_id=row['assigned_teacher'],
+                )
+
+                created_count += 1
+
+            except ValidationError as e:
+                errors.append(f"Row {index}: {str(e)}")
+            except Exception as e:
+                errors.append(f"Row {index}: Unexpected error: {str(e)}")
+
+        return Response({
+            "message": f"{created_count} students created successfully.",
+            "errors": errors
+        }, status=201 if created_count > 0 else 400)
+
