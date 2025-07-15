@@ -7,10 +7,16 @@ class ExamSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'description', 'created_at']
         read_only_fields = ['id', 'created_at']
 
-class QuestionSerializer(serializers.ModelSerializer):
+class QuestionTeacherSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = ['id', 'exam', 'text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
+
+
+class QuestionStudentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Question
+        fields = ['id', 'exam', 'text', 'option_a', 'option_b', 'option_c', 'option_d']
 
 
 class StudentAnswerSerializer(serializers.ModelSerializer):

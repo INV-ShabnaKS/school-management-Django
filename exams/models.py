@@ -1,9 +1,7 @@
 from django.db import models
+from django.utils import timezone
 from teachers.models import Teacher
 from users.models import CustomUser
-from django.utils import timezone
-
-
 
 
 class Exam(models.Model):
@@ -24,7 +22,6 @@ class Question(models.Model):
     option_c = models.CharField(max_length=255)
     option_d = models.CharField(max_length=255)
 
-
     CORRECT_CHOICES = [
         ('A', 'Option A'),
         ('B', 'Option B'),
@@ -38,7 +35,11 @@ class Question(models.Model):
 
 
 class StudentAnswer(models.Model):
-    student = models.ForeignKey(CustomUser, on_delete=models.CASCADE, limit_choices_to={'role': 'Student'})
+    student = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        limit_choices_to={'role': 'Student'}
+    )
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     selected_answer = models.CharField(max_length=1, choices=Question.CORRECT_CHOICES)
     is_correct = models.BooleanField(default=False)
@@ -53,10 +54,11 @@ class ExamSession(models.Model):
     student = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE)
     started_at = models.DateTimeField(auto_now_add=True)
+    submitted = models.BooleanField(default=False) 
 
     def is_time_exceeded(self):
-        return timezone.now() > self.started_at + timezone.timedelta(minutes=3)
+        
+        return timezone.now() > self.started_at + timezone.timedelta(minutes=5)
 
     def __str__(self):
         return f"{self.student.username} - {self.exam.title} started at {self.started_at}"
-

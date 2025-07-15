@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.core.exceptions import PermissionDenied
 
 from .models import Exam, Question, StudentAnswer, ExamSession
-from .serializers import ExamSerializer, QuestionSerializer, StudentAnswerSerializer
+from .serializers import ExamSerializer, QuestionTeacherSerializer, QuestionStudentSerializer, StudentAnswerSerializer
 from teachers.models import Teacher
 from users.models import CustomUser
 
@@ -38,13 +38,14 @@ class ExamViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
+from .serializers import QuestionTeacherSerializer, QuestionStudentSerializer
+
 class QuestionViewSet(viewsets.ModelViewSet):
-    serializer_class = QuestionSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        exam_id = self.request.query_params.get('exam')  # filter by exam
+        exam_id = self.request.query_params.get('exam')  
         if user.role == 'Teacher':
             try:
                 teacher = Teacher.objects.get(user=user)
@@ -57,6 +58,12 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 return Question.objects.filter(exam__id=exam_id)
             return Question.objects.none()
         return Question.objects.none()
+
+    def get_serializer_class(self):
+        user = self.request.user
+        if user.role == 'Teacher':
+            return QuestionTeacherSerializer  
+        return QuestionStudentSerializer      
 
     def perform_create(self, serializer):
         exam = serializer.validated_data['exam']
@@ -78,39 +85,77 @@ class QuestionViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
+
 class SubmitAnswerView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
         if user.role != 'Student':
-            return Response({"error": "Only students can submit answers"}, status=403)
+            return Response({"detail": "Only students can submit answers"}, status=403)
 
-        question_id = request.data.get('question')
-        selected_answer = request.data.get('selected_answer')
+        answers_data = request.data
+        if not isinstance(answers_data, list):
+            return Response({"detail": "Data must be a list of answers."}, status=400)
+
+        if not answers_data:
+            return Response({"detail": "No answers provided."}, status=400)
+
+        first_question_id = answers_data[0].get('question')
+        if not first_question_id:
+            return Response({"error": "Missing question ID."}, status=400)
 
         try:
-            question = Question.objects.get(id=question_id)
+            question = Question.objects.get(id=first_question_id)
+            exam = question.exam
         except Question.DoesNotExist:
-            return Response({"error": "Invalid question ID"}, status=400)
+            return Response({"error": "Invalid question ID."}, status=400)
 
-        exam = question.exam
         try:
             session = ExamSession.objects.get(student=user, exam=exam)
         except ExamSession.DoesNotExist:
             return Response({"error": "You haven't started this exam."}, status=400)
 
         if session.is_time_exceeded():
-            return Response({"error": "Time exceeded. You cannot submit answers now."}, status=403)
+            return Response({"error": "Time exceeded. Cannot submit answers."}, status=403)
 
-        answer, _ = StudentAnswer.objects.update_or_create(
-            student=user,
-            question=question,
-            defaults={'selected_answer': selected_answer}
-        )
+        if session.submitted:
+            return Response({"error": "You have already submitted this exam."}, status=403)
 
-        serializer = StudentAnswerSerializer(answer)
-        return Response(serializer.data, status=201)
+        saved_answers = []
+        for answer_data in answers_data:
+            question_id = answer_data.get('question')
+            selected_answer = answer_data.get('selected_answer')
+
+            try:
+                question = Question.objects.get(id=question_id)
+            except Question.DoesNotExist:
+                continue  
+
+            answer, _ = StudentAnswer.objects.update_or_create(
+                student=user,
+                question=question,
+                defaults={'selected_answer': selected_answer}
+            )
+            saved_answers.append(answer)
+
+        
+        session.submitted = True
+        session.save()
+
+        total = len(saved_answers)
+        correct = sum(1 for ans in saved_answers if ans.is_correct)
+
+        return Response({
+            "message": "You’ve completed the exam.",
+            "student": user.username,
+            "exam": exam.title,
+            "total_attempted": total,
+            "correct_answers": correct,
+            "score": f"{correct} / {total}"
+        }, status=200)
+
+
 
 
 class StudentScoreView(APIView):
@@ -167,11 +212,10 @@ def start_exam(request, exam_id):
 
     if not created:
         if session.is_time_exceeded():
-            # Restart session
-            session.start_time = timezone.now()
+            session.started_at = timezone.now()
             session.save()
-            return Response({"message": "Exam restarted. You have 3 minutes from now."})
+            return Response({"message": "Exam restarted. You have 5 minutes from now."})
         else:
             return Response({"detail": "You already started this exam."}, status=400)
 
-    return Response({"message": "Exam started. You have 3 minutes to finish."})
+    return Response({"message": "Exam started. You have 5 minutes to finish."})
